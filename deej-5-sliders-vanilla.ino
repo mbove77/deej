@@ -1,0 +1,186 @@
+#include <Adafruit_NeoPixel.h>
+#include <EEPROM.h>
+#include <Bounce2.h>
+
+const int NUM_SLIDERS = 5;
+const int analogInputs[NUM_SLIDERS] = {A7, A6, A5, A4, A3};
+
+#define LED_PIN 6
+#define BUTTON_PIN 7
+#define LONG_PRESS_DURATION 1000
+
+Adafruit_NeoPixel strip(NUM_SLIDERS, LED_PIN, NEO_GRB + NEO_KHZ800);
+
+Bounce debouncer = Bounce();
+
+int ledMode = 1;
+int analogSliderValues[NUM_SLIDERS];
+int savedSliderValues[NUM_SLIDERS]; // Para guardar valores al hacer mute
+bool isMuted = false;
+unsigned long buttonPressStartTime = 0;
+bool buttonActive = false;
+
+void setup() {
+  for (int i = 0; i < NUM_SLIDERS; i++) {
+    pinMode(analogInputs[i], INPUT);
+  }
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  debouncer.attach(BUTTON_PIN);
+  debouncer.interval(25); // intervalo de debounce en ms
+
+  Serial.begin(9600);
+  strip.begin();
+  strip.setBrightness(100);
+  strip.show();
+
+  // Leer modo desde EEPROM
+  byte savedMode = EEPROM.read(0);
+  if (savedMode <= 9) {
+    ledMode = savedMode;
+  }
+  Serial.println(ledMode);
+}
+
+void loop() {
+  debouncer.update();
+  checkButton();
+  updateSliderValues();
+  updateLEDs();
+  sendSliderValues();
+  delay(10);
+}
+
+void checkButton() {
+  // Detección de pulsación corta/larga
+  if (debouncer.fell()) {
+    buttonPressStartTime = millis();
+    buttonActive = true;
+  }
+  
+  if (debouncer.rose() && buttonActive) {
+    buttonActive = false;
+    unsigned long pressDuration = millis() - buttonPressStartTime;
+    
+    if (pressDuration < LONG_PRESS_DURATION) {
+      ledMode = (ledMode + 1) % 10;
+      EEPROM.write(0, ledMode);
+      delay(20);
+      Serial.print("Modo cambiado a: ");
+      Serial.println(ledMode);
+    }
+  }
+  
+  // Detección de pulsación larga (mientras se mantiene presionado)
+  if (buttonActive && (millis() - buttonPressStartTime) >= LONG_PRESS_DURATION) {
+    buttonActive = false; // Para no repetir la acción
+    
+    if (!isMuted) {
+      for (int i = 0; i < NUM_SLIDERS; i++) {
+        savedSliderValues[i] = analogSliderValues[i];
+        analogSliderValues[i] = 1023; //Lo ponemos a 1023 por que tengo invertido en deej
+      }
+      isMuted = true;
+    } else {
+      for (int i = 0; i < NUM_SLIDERS; i++) {
+        analogSliderValues[i] = savedSliderValues[i];
+      }
+      isMuted = false;
+    }
+  }
+}
+
+void updateSliderValues() {
+  if (!isMuted) {
+    for (int i = 0; i < NUM_SLIDERS; i++) {
+      analogSliderValues[i] = analogRead(analogInputs[i]);
+    }
+  }
+}
+
+void sendSliderValues() {
+  String builtString = "";
+  for (int i = 0; i < NUM_SLIDERS; i++) {
+    builtString += String(analogSliderValues[i]);
+    if (i < NUM_SLIDERS - 1) builtString += "|";
+  }
+  Serial.println(builtString);
+}
+
+uint32_t colorGreenToRed(int val) {
+  if (val < 512) return strip.Color(map(val, 0, 511, 0, 255), 255, 0);
+  return strip.Color(255, map(val, 512, 1023, 255, 0), 0);
+}
+
+uint32_t colorBlueToWhite(int val) {
+  if (val < 512) return strip.Color(0, map(val, 0, 511, 0, 255), 255);
+  return strip.Color(map(val, 512, 1023, 0, 255), 255, 255);
+}
+
+uint32_t colorRedToGreen(int val) {
+  if (val < 512) return strip.Color(255, map(val, 0, 511, 0, 255), 0);
+  return strip.Color(map(val, 512, 1023, 255, 0), 255, 0);
+}
+
+uint32_t colorWhiteToBlue(int val) {
+  if (val < 512) return strip.Color(map(val, 0, 511, 255, 0), 255, 255);
+  return strip.Color(0, map(val, 512, 1023, 255, 0), 255);
+}
+
+uint32_t colorPurpleToGreen(int val) {
+  return strip.Color(
+    map(val, 0, 1023, 128, 0),
+    map(val, 0, 1023, 0, 255),
+    map(val, 0, 1023, 128, 0)
+  );
+}
+
+uint32_t colorRainbow(int val) {
+  uint16_t hue = map(val, 0, 1023, 0, 65535);
+  return strip.gamma32(strip.ColorHSV(hue));
+}
+
+uint32_t colorPulse(int val, int sliderIndex) {
+  float t = (millis() + sliderIndex * 100) / 1000.0;
+  float pulse = (sin(t * 2 * PI) + 1.0) / 2.0;
+  byte brightness = pulse * 200;
+
+  uint16_t hue = map(val, 0, 1023, 0, 65535);
+  uint32_t color = strip.ColorHSV(hue, 255, brightness);
+  return strip.gamma32(color);
+}
+
+void updateLEDs() {
+  if (ledMode == 0) {
+    for (int i = 0; i < NUM_SLIDERS; i++) {
+      strip.setPixelColor(i, 0);
+    }
+    strip.show();
+    return;
+  }
+
+  for (int i = 0; i < NUM_SLIDERS; i++) {
+    int val = analogSliderValues[i];
+    int ledIndex = NUM_SLIDERS - 1 - i;
+    uint32_t color;
+
+    switch (ledMode) {
+      case 1: color = colorGreenToRed(val); break;
+      case 2: color = colorBlueToWhite(val); break;
+      case 3: color = strip.Color(0, 0, map(val, 0, 1023, 0, 200)); break;
+      case 4: {
+        byte b = map(val, 0, 1023, 0, 200);
+        color = strip.Color(b, b, b); break;
+      }
+      case 5: color = colorRedToGreen(val); break;
+      case 6: color = colorWhiteToBlue(val); break;
+      case 7: color = colorPurpleToGreen(val); break;
+      case 8: color = colorRainbow(val); break;
+      case 9: color = colorPulse(val, i); break;
+      default: color = 0; break;
+    }
+
+    strip.setPixelColor(ledIndex, color);
+  }
+  strip.show();
+}
