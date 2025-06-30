@@ -63,7 +63,7 @@ void checkButton() {
     unsigned long pressDuration = millis() - buttonPressStartTime;
     
     if (pressDuration < LONG_PRESS_DURATION) {
-      ledMode = (ledMode + 1) % 10;
+      ledMode = (ledMode + 1) % 9;
       EEPROM.write(0, ledMode);
       delay(20);
       Serial.print("Modo cambiado a: ");
@@ -113,13 +113,8 @@ uint32_t colorGreenToRed(int val) {
 }
 
 uint32_t colorBlueToWhite(int val) {
-  if (val < 512) return strip.Color(0, map(val, 0, 511, 0, 255), 255);
-  return strip.Color(map(val, 512, 1023, 0, 255), 255, 255);
-}
-
-uint32_t colorRedToGreen(int val) {
-  if (val < 512) return strip.Color(255, map(val, 0, 511, 0, 255), 0);
-  return strip.Color(map(val, 512, 1023, 255, 0), 255, 0);
+  if (val < 512) return strip.Color(map(val, 0, 511, 255, 0), 255, 255);
+  return strip.Color(0, map(val, 512, 1023, 255, 0), 255);
 }
 
 uint32_t colorWhiteToBlue(int val) {
@@ -127,24 +122,36 @@ uint32_t colorWhiteToBlue(int val) {
   return strip.Color(0, map(val, 512, 1023, 255, 0), 255);
 }
 
+uint32_t colorBlueToOff(int val) {
+  return strip.Color(0, 0, map(val, 0, 1023, 200, 0));
+}
+
+uint32_t colorOffToWhite(int val) {
+  byte b = map(val, 0, 1023, 200, 0); 
+  return strip.Color(b, b, b);
+}
+
 uint32_t colorPurpleToGreen(int val) {
   return strip.Color(
-    map(val, 0, 1023, 128, 0),
-    map(val, 0, 1023, 0, 255),
-    map(val, 0, 1023, 128, 0)
+    map(val, 0, 1023, 0, 128),
+    map(val, 0, 1023, 255, 0),
+    map(val, 0, 1023, 0, 128)
   );
 }
 
 uint32_t colorRainbow(int val) {
-  uint16_t hue = map(val, 0, 1023, 0, 65535);
+  uint16_t hue = map(val, 0, 1023, 0, 49151); 
   return strip.gamma32(strip.ColorHSV(hue));
 }
 
-uint32_t colorPulse(int val, int sliderIndex) {
-  float t = (millis() + sliderIndex * 100) / 1000.0;
-  float pulse = (sin(t * 2 * PI) + 1.0) / 2.0;
-  byte brightness = pulse * 200;
+const float PULSE_SPEED = 0.4f;           // Controla la velocidad general (menor = más lento)
+const float LED_TRANSITION_SPEED = 0.2f;  // Controla el desfase entre LEDs (menor = más lento)
 
+uint32_t colorPulse(int val, int sliderIndex) {
+  float t = millis() / (1000.0f / PULSE_SPEED);
+  float ledOffset = sliderIndex * LED_TRANSITION_SPEED;
+  float pulse = (sin((t + ledOffset) * 2 * PI) + 1.0f) / 2.0f;
+  byte brightness = pulse * 200;
   uint16_t hue = map(val, 0, 1023, 0, 65535);
   uint32_t color = strip.ColorHSV(hue, 255, brightness);
   return strip.gamma32(color);
@@ -167,17 +174,13 @@ void updateLEDs() {
     switch (ledMode) {
       case 1: color = colorGreenToRed(val); break;
       case 2: color = colorBlueToWhite(val); break;
-      case 3: color = strip.Color(0, 0, map(val, 0, 1023, 0, 200)); break;
-      case 4: {
-        byte b = map(val, 0, 1023, 0, 200);
-        color = strip.Color(b, b, b); break;
-      }
-      case 5: color = colorRedToGreen(val); break;
-      case 6: color = colorWhiteToBlue(val); break;
-      case 7: color = colorPurpleToGreen(val); break;
-      case 8: color = colorRainbow(val); break;
-      case 9: color = colorPulse(val, i); break;
-      default: color = 0; break;
+      case 3: color = colorBlueToOff(val); break;
+      case 4: color = colorOffToWhite(val); break;
+      case 5: color = colorWhiteToBlue(val); break; // reemplzar o borrar
+      case 6: color = colorPurpleToGreen(val); break;
+      case 7: color = colorRainbow(val); break;
+      case 8: color = colorPulse(val, i); break;
+      default: color = 0; break; 
     }
 
     strip.setPixelColor(ledIndex, color);
