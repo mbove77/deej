@@ -107,31 +107,56 @@ void sendSliderValues() {
   Serial.println(builtString);
 }
 
-uint32_t colorGreenToRed(int val) {
-  if (val < 512) return strip.Color(map(val, 0, 511, 0, 255), 255, 0);
-  return strip.Color(255, map(val, 512, 1023, 255, 0), 0);
+uint32_t colorRedToCyan(int val, bool invertir = false) {   
+  if(invertir) {
+    val = 1023 - val;
+  }
+  if(val < 341) {
+    return strip.Color(255, map(val, 0, 340, 0, 165), 0                           );
+  } 
+  else if(val < 682) { 
+    return strip.Color(map(val, 341, 681, 255, 0), map(val, 341, 681, 165, 255), 0);
+  }
+  else {
+    return strip.Color(0, 255, map(val, 682, 1023, 0, 255));
+  }
 }
 
-uint32_t colorBlueToWhite(int val) {
+uint32_t colorBlueToWhite(int val, bool invertir = false) {
+  if(invertir) {
+    val = 1023 - val;
+  }
   if (val < 512) return strip.Color(map(val, 0, 511, 255, 0), 255, 255);
   return strip.Color(0, map(val, 512, 1023, 255, 0), 255);
 }
 
-uint32_t colorWhiteToBlue(int val) {
+uint32_t colorWhiteToBlue(int val, bool invertir = false) {
+  if(invertir) {
+    val = 1023 - val;
+  }
   if (val < 512) return strip.Color(map(val, 0, 511, 255, 0), 255, 255);
   return strip.Color(0, map(val, 512, 1023, 255, 0), 255);
 }
 
-uint32_t colorBlueToOff(int val) {
+uint32_t colorBlueToOff(int val, bool invertir = false) {
+  if(invertir) {
+    val = 1023 - val;
+  }
   return strip.Color(0, 0, map(val, 0, 1023, 200, 0));
 }
 
-uint32_t colorOffToWhite(int val) {
+uint32_t colorOffToWhite(int val, bool invertir = false) {
+  if(invertir) {
+    val = 1023 - val;
+  }
   byte b = map(val, 0, 1023, 200, 0); 
   return strip.Color(b, b, b);
 }
 
-uint32_t colorPurpleToGreen(int val) {
+uint32_t colorPurpleToGreen(int val, bool invertir = false) {
+  if(invertir) {
+    val = 1023 - val;
+  }
   return strip.Color(
     map(val, 0, 1023, 0, 128),
     map(val, 0, 1023, 255, 0),
@@ -139,7 +164,10 @@ uint32_t colorPurpleToGreen(int val) {
   );
 }
 
-uint32_t colorRainbow(int val) {
+uint32_t colorRainbow(int val, bool invertir = false) {
+  if(invertir) {
+    val = 1023 - val;
+  }
   uint16_t hue = map(val, 0, 1023, 0, 49151); 
   return strip.gamma32(strip.ColorHSV(hue));
 }
@@ -172,11 +200,11 @@ void updateLEDs() {
     uint32_t color;
 
     switch (ledMode) {
-      case 1: color = colorGreenToRed(val); break;
+      case 1: color = colorRedToCyan(val, true); break;
       case 2: color = colorBlueToWhite(val); break;
       case 3: color = colorBlueToOff(val); break;
       case 4: color = colorOffToWhite(val); break;
-      case 5: color = colorWhiteToBlue(val); break; // reemplzar o borrar
+      case 5: color = colorWhiteToBlue(val); break; 
       case 6: color = colorPurpleToGreen(val); break;
       case 7: color = colorRainbow(val); break;
       case 8: color = colorPulse(val, i); break;
